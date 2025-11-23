@@ -35,14 +35,13 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
-        if (error.response) {
-          this.handleApiError(error.response)
-        } else if (error.request) {
-          toast.error('Network error. Please check your connection.')
-        } else {
-          toast.error('An unexpected error occurred.')
-        }
-        return Promise.reject(error)
+        const parsedError = parseAPIError(error)
+
+        // Log the error for debugging
+        console.error('API Error:', parsedError)
+
+        // Reject with parsed error for consistent error handling
+        return Promise.reject(parsedError)
       }
     )
   }
