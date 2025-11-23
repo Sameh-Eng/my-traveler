@@ -86,6 +86,7 @@ const DashboardPage = () => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('created_desc')
   const [activeTab, setActiveTab] = useState('bookings')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     loadBookings()
