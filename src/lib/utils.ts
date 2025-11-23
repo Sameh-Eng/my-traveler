@@ -305,3 +305,194 @@ export function getFlightStatus(status: string): {
     bgColor: 'bg-gray-100',
   }
 }
+
+// Form validation helper functions
+export function getFieldError(errors: any, fieldName: string): string | undefined {
+  return errors?.[fieldName]?.message
+}
+
+export function hasFieldError(errors: any, fieldName: string): boolean {
+  return !!errors?.[fieldName]
+}
+
+export function getFormErrors(error: any): Record<string, string> {
+  if (!error) return {}
+
+  // Handle Zod validation errors
+  if (error.errors && Array.isArray(error.errors)) {
+    const errors: Record<string, string> = {}
+    error.errors.forEach((err: any) => {
+      const path = Array.isArray(err.path) ? err.path.join('.') : err.path
+      errors[path] = err.message
+    })
+    return errors
+  }
+
+  // Handle API validation errors
+  if (error.response?.data?.errors) {
+    return error.response.data.errors
+  }
+
+  // Handle simple error message
+  if (error.response?.data?.message) {
+    return { general: error.response.data.message }
+  }
+
+  if (error.message) {
+    return { general: error.message }
+  }
+
+  return { general: 'An unexpected error occurred' }
+}
+
+export function validateFieldOnChange(
+  value: any,
+  schema: any,
+  fieldName: string,
+  setError: (name: string, error: any) => void,
+  clearError: (name: string) => void
+) {
+  try {
+    schema.parse({ [fieldName]: value })
+    clearError(fieldName)
+  } catch (error) {
+    const fieldError = error.errors?.find((err: any) =>
+      Array.isArray(err.path) && err.path[0] === fieldName
+    )
+    if (fieldError) {
+      setError(fieldName, { message: fieldError.message })
+    }
+  }
+}
+
+export function formatCardNumber(number: string): string {
+  const cleaned = number.replace(/\D/g, '')
+  const groups = cleaned.match(/(\d{1,4})(\d{1,4})?(\d{1,4})?(\d{1,4})?/)
+  if (!groups) return number
+
+  return [groups[1], groups[2], groups[3], groups[4]]
+    .filter(Boolean)
+    .join(' ')
+}
+
+export function formatExpiryDate(value: string): string {
+  const cleaned = value.replace(/\D/g, '')
+  if (cleaned.length >= 3) {
+    return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}`
+  }
+  return cleaned
+}
+
+export function validateCreditCard(number: string): boolean {
+  // Luhn algorithm for credit card validation
+  const digits = number.replace(/\D/g, '')
+  let sum = 0
+  let isEven = false
+
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let digit = parseInt(digits[i], 10)
+
+    if (isEven) {
+      digit *= 2
+      if (digit > 9) {
+        digit -= 9
+      }
+    }
+
+    sum += digit
+    isEven = !isEven
+  }
+
+  return sum % 10 === 0
+}
+
+export function getCardType(number: string): string {
+  const cleaned = number.replace(/\D/g, '')
+
+  // Visa
+  if (/^4/.test(cleaned)) return 'visa'
+
+  // Mastercard
+  if (/^5[1-5]/.test(cleaned)) return 'mastercard'
+
+  // American Express
+  if (/^3[47]/.test(cleaned)) return 'amex'
+
+  // Discover
+  if (/^6(?:011|5)/.test(cleaned)) return 'discover'
+
+  // JCB
+  if (/^35/.test(cleaned)) return 'jcb'
+
+  // Diners Club
+  if (/^3[0689]/.test(cleaned)) return 'diners'
+
+  return 'unknown'
+}
+
+export function validateIATACode(code: string): boolean {
+  return /^[A-Z]{3}$/.test(code.toUpperCase())
+}
+
+export function sanitizeFormData<T extends Record<string, any>>(data: T): T {
+  const sanitized: Record<string, any> = {}
+
+  Object.keys(data).forEach(key => {
+    const value = data[key]
+    if (typeof value === 'string') {
+      sanitized[key] = sanitizeInput(value)
+    } else if (Array.isArray(value)) {
+      sanitized[key] = value.map(item =>
+        typeof item === 'string' ? sanitizeInput(item) : item
+      )
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeFormData(value)
+    } else {
+      sanitized[key] = value
+    }
+  })
+
+  return sanitized as T
+}
+
+export function validateFormStep<T>(
+  data: T,
+  schema: any,
+  stepFields: (keyof T)[]
+): { isValid: boolean; errors: Record<string, string> } {
+  const errors: Record<string, string> = {}
+
+  try {
+    schema.parse(data)
+    return { isValid: true, errors: {} }
+  } catch (error: any) {
+    if (error.errors && Array.isArray(error.errors)) {
+      error.errors.forEach((err: any) => {
+        const path = Array.isArray(err.path) ? err.path.join('.') : err.path
+        const fieldName = Array.isArray(err.path) ? err.path[0] : err.path
+
+        // Only include errors for fields in the current step
+        if (stepFields.includes(fieldName as keyof T)) {
+          errors[path] = err.message
+        }
+      })
+    }
+
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors
+    }
+  }
+}
+
+export function transformFormData<T>(data: T, transformations: Record<keyof T, (value: any) => any>): T {
+  const transformed = { ...data }
+
+  Object.keys(transformations).forEach(key => {
+    if (key in transformed) {
+      transformed[key as keyof T] = transformations[key as keyof T](transformed[key as keyof T])
+    }
+  })
+
+  return transformed
+}
