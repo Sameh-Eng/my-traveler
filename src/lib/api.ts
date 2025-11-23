@@ -53,34 +53,51 @@ class ApiClient {
     return null
   }
 
-  private handleApiError = (error: any) => {
-    const status = error.status
-    const message = error.data?.message || error.message || 'An error occurred'
+  // Enhanced request method with retry logic and better error handling
+  private async handleRequest<T>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig,
+    retryCount: number = 0,
+    maxRetries: number = 3
+  ): Promise<T> {
+    try {
+      const response = await this.client.request({
+        method,
+        url,
+        data,
+        ...config,
+      })
 
-    switch (status) {
-      case 400:
-        toast.error(message || 'Invalid request')
-        break
-      case 401:
-        toast.error('Authentication required. Please log in.')
-        // Clear token and redirect to login
+      return response.data
+    } catch (error) {
+      const parsedError = parseAPIError(error)
+
+      // Handle authentication errors
+      if (parsedError.code === 'AUTHENTICATION_ERROR') {
         this.clearStoredToken()
-        window.location.href = '/auth/login'
-        break
-      case 403:
-        toast.error('Access denied. You do not have permission to perform this action.')
-        break
-      case 404:
-        toast.error('Resource not found.')
-        break
-      case 429:
-        toast.error('Too many requests. Please try again later.')
-        break
-      case 500:
-        toast.error('Server error. Please try again later.')
-        break
-      default:
-        toast.error(message || 'An error occurred.')
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
+        throw parsedError
+      }
+
+      // Handle network errors with retry logic
+      if (parsedError instanceof NetworkError && retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 1000 // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, delay))
+        return this.handleRequest<T>(method, url, data, config, retryCount + 1, maxRetries)
+      }
+
+      // Handle timeout errors
+      if (parsedError instanceof TimeoutError && retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 1000
+        await new Promise(resolve => setTimeout(resolve, delay))
+        return this.handleRequest<T>(method, url, data, config, retryCount + 1, maxRetries)
+      }
+
+      throw parsedError
     }
   }
 
