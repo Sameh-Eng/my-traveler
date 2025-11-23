@@ -10,10 +10,11 @@ import Sidebar from '@/components/layout/Sidebar'
 
 const BookingDetailsPage = () => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
 
   // Get booking ID from URL params
-  const bookingId = router.query?.id as string || '123'
+  const bookingId = searchParams?.get('id') || '123'
 
   const handleBookingUpdate = () => {
     // Refresh booking data or navigate back to list
