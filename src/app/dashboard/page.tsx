@@ -35,7 +35,7 @@ import { Input } from '@/components/ui/Input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { Select } from '@/components/ui/Select'
 import { Loading } from '@/components/ui/Loading'
-import { Sidebar } from '@/components/layout/Sidebar'
+import Sidebar from '@/components/layout/Sidebar'
 import { useAuthStore } from '@/store'
 import { formatCurrency, formatDate, formatTime, getRelativeTime, getFlightStatus } from '@/lib/utils'
 
