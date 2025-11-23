@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { toast } from 'react-hot-toast'
+import { parseAPIError, NetworkError, TimeoutError, AppError } from './error-handling'
 import { ApiResponse, FlightSearchParams, FlightSearchResponse } from '@/types'
 
 // API configuration
