@@ -108,26 +108,7 @@ class ApiClient {
     }
   }
 
-  private async handleRequest<T>(
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-    url: string,
-    data?: any,
-    config?: AxiosRequestConfig
-  ): Promise<T> {
-    try {
-      const response = await this.client.request({
-        method,
-        url,
-        data,
-        ...config,
-      })
-
-      return response.data
-    } catch (error) {
-      throw error
-    }
-  }
-
+  
   // Generic HTTP methods
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return this.handleRequest<T>('GET', url, undefined, config)
