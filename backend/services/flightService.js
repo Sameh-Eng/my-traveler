@@ -15,10 +15,15 @@ class FlightService {
     this.baseURL = process.env.AVIATIONSTACK_BASE_URL || 'http://api.aviationstack.com/v1';
     this.timeout = parseInt(process.env.FLIGHT_API_TIMEOUT) || 10000;
     this.cacheTTL = parseInt(process.env.FLIGHT_CACHE_TTL) || 300; // 5 minutes
+    this.fallbackEnabled = process.env.FLIGHT_FALLBACK_ENABLED !== 'false';
+    this.fallbackMode = false; // Track if we're currently in fallback mode
 
     // Initialize Redis client for caching
     this.redisClient = null;
     this.initializeRedis();
+
+    // Initialize mock data for fallback
+    this.mockData = new FlightMockData();
   }
 
   /**
