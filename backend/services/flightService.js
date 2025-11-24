@@ -466,6 +466,29 @@ class FlightService {
         return this.transformFlightStatus(flight);
 
       } catch (error) {
+        // Check if this is a fallback mode error
+        if (error.message.startsWith('FALLBACK_MODE:')) {
+          logger.warn('External API failed, using mock fallback for flight status', {
+            iataCode,
+            originalError: error.message.replace('FALLBACK_MODE: ', '')
+          });
+
+          // Try mock data
+          const mockStatus = this.mockData.getFlightStatus(iataCode);
+          if (mockStatus) {
+            return mockStatus;
+          }
+
+          throw new Error('Flight not found');
+        } else if (error.message === 'Flight not found') {
+          // Try mock data as fallback even for regular "not found" errors
+          const mockStatus = this.mockData.getFlightStatus(iataCode);
+          if (mockStatus) {
+            logger.info('Flight not found in external API, found in mock data', { iataCode });
+            return mockStatus;
+          }
+        }
+
         logger.error(`Failed to get flight status for ${iataCode}:`, error.message);
         throw error;
       }
