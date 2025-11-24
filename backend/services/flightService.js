@@ -881,24 +881,93 @@ class FlightService {
    */
   async getCacheStats() {
     try {
+      const baseStats = {};
+
       if (this.redisClient) {
         const keys = await this.redisClient.keys('flights:*');
-        return {
-          type: 'redis',
-          keys: keys.length,
-          ttl: this.cacheTTL
-        };
+        baseStats.type = 'redis';
+        baseStats.keys = keys.length;
+        baseStats.ttl = this.cacheTTL;
       } else if (this.memoryCache) {
-        return {
-          type: 'memory',
-          keys: this.memoryCache.size,
-          ttl: this.cacheTTL
-        };
+        baseStats.type = 'memory';
+        baseStats.keys = this.memoryCache.size;
+        baseStats.ttl = this.cacheTTL;
+      } else {
+        baseStats.type = 'none';
       }
-      return { type: 'none' };
+
+      // Add fallback mode status
+      baseStats.fallbackMode = this.fallbackMode;
+      baseStats.fallbackEnabled = this.fallbackEnabled;
+      baseStats.mockDataFlights = this.mockData.getAllFlights().length;
+
+      return baseStats;
     } catch (error) {
       logger.error('Failed to get cache stats:', error.message);
-      return { type: 'error', error: error.message };
+      return {
+        type: 'error',
+        error: error.message,
+        fallbackMode: this.fallbackMode,
+        fallbackEnabled: this.fallbackEnabled,
+        mockDataFlights: this.mockData.getAllFlights().length
+      };
+    }
+  }
+
+  /**
+   * Get service status including fallback mode
+   * @returns {Object} - Service status
+   */
+  async getServiceStatus() {
+    try {
+      const cacheStats = await this.getCacheStats();
+
+      // Test external API connectivity
+      let apiStatus = 'healthy';
+      let apiResponseTime = 0;
+      let usingFallback = this.fallbackMode;
+
+      if (!usingFallback) {
+        try {
+          const startTime = Date.now();
+          await this.makeDirectApiRequest('test_conn', '/airlines', { limit: 1 });
+          apiResponseTime = Date.now() - startTime;
+        } catch (error) {
+          apiStatus = 'unhealthy';
+          if (this.fallbackEnabled) {
+            usingFallback = true;
+          }
+        }
+      }
+
+      return {
+        success: true,
+        api: {
+          status: apiStatus,
+          responseTime: `${apiResponseTime}ms`,
+          provider: 'AviationStack',
+          fallbackEnabled: this.fallbackEnabled,
+          usingFallback: usingFallback
+        },
+        cache: cacheStats,
+        mockData: {
+          flightsAvailable: this.mockData.getAllFlights().length,
+          airlines: this.mockData.airlines.length,
+          airports: Object.keys(this.mockData.airports).length,
+          aircraft: this.mockData.aircraft.length
+        },
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      logger.error('Failed to get service status:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        fallbackMode: this.fallbackMode,
+        fallbackEnabled: this.fallbackEnabled,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 }
