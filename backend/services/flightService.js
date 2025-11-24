@@ -318,50 +318,62 @@ class FlightService {
     })}`;
 
     return await this.getCachedOrFetch(cacheKey, async () => {
-      // Prepare API parameters
-      const apiParams = {
-        dep_iata: origin.toUpperCase(),
-        arr_iata: destination.toUpperCase(),
-        dep_date: this.formatDateForAPI(departureDate),
-        adults,
-        children,
-        infants,
-        limit: Math.min(limit, 100), // API limit
-        offset,
-        direct: direct ? 'true' : 'false'
-      };
-
-      // Add return date if provided
-      if (returnDate) {
-        apiParams.return_date = this.formatDateForAPI(returnDate);
-      }
-
-      // Add cabin class filter
-      if (cabinClass && cabinClass !== 'economy') {
-        apiParams.cabin_class = cabinClass;
-      }
-
       try {
+        // First, try external API
+        const apiParams = {
+          dep_iata: origin.toUpperCase(),
+          arr_iata: destination.toUpperCase(),
+          dep_date: this.formatDateForAPI(departureDate),
+          adults,
+          children,
+          infants,
+          limit: Math.min(limit, 100), // API limit
+          offset,
+          direct: direct ? 'true' : 'false'
+        };
+
+        // Add return date if provided
+        if (returnDate) {
+          apiParams.return_date = this.formatDateForAPI(returnDate);
+        }
+
+        // Add cabin class filter
+        if (cabinClass && cabinClass !== 'economy') {
+          apiParams.cabin_class = cabinClass;
+        }
+
         const response = await this.makeApiRequest('/flights', apiParams);
 
         // Transform API response to our format
         return this.transformSearchResults(response.data, searchParams);
 
       } catch (error) {
-        // Log the error but return empty results for graceful degradation
-        logger.error('Flight search failed:', error.message);
-        return {
-          success: false,
-          message: error.message,
-          flights: [],
-          pagination: {
-            total: 0,
-            limit,
-            offset,
-            hasMore: false
-          },
-          searchParams
-        };
+        // Check if this is a fallback mode error
+        if (error.message.startsWith('FALLBACK_MODE:')) {
+          logger.warn('External API failed, using mock fallback data', {
+            originalError: error.message.replace('FALLBACK_MODE: ', ''),
+            searchParams
+          });
+
+          // Use mock data as fallback
+          return this.mockData.searchFlights(searchParams);
+        } else {
+          // Log the error but return empty results for graceful degradation
+          logger.error('Flight search failed:', error.message);
+          return {
+            success: false,
+            message: error.message,
+            flights: [],
+            pagination: {
+              total: 0,
+              limit,
+              offset,
+              hasMore: false
+            },
+            searchParams,
+            isMockData: false
+          };
+        }
       }
     });
   }
