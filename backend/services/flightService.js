@@ -404,6 +404,35 @@ class FlightService {
         return this.transformFlightDetails(response.data[0]);
 
       } catch (error) {
+        // Check if this is a fallback mode error
+        if (error.message.startsWith('FALLBACK_MODE:')) {
+          logger.warn('External API failed, using mock fallback for flight details', {
+            flightId,
+            originalError: error.message.replace('FALLBACK_MODE: ', '')
+          });
+
+          // Try to find mock flight by flight ID or flight number
+          const mockFlight = this.mockData.getFlightDetails(flightId);
+          if (mockFlight) {
+            return mockFlight;
+          }
+
+          // Try finding by IATA code
+          const flightByIata = this.mockData.getFlightByIata(flightId);
+          if (flightByIata) {
+            return this.mockData.getFlightDetails(flightByIata.id);
+          }
+
+          throw new Error('Flight not found');
+        } else if (error.message === 'Flight not found') {
+          // Try mock data as fallback even for regular "not found" errors
+          const mockFlight = this.mockData.getFlightDetails(flightId);
+          if (mockFlight) {
+            logger.info('Flight not found in external API, found in mock data', { flightId });
+            return mockFlight;
+          }
+        }
+
         logger.error(`Failed to get flight details for ${flightId}:`, error.message);
         throw error;
       }
