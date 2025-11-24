@@ -100,7 +100,7 @@ class FlightService {
   }
 
   /**
-   * Make HTTP request to external API with error handling
+   * Make HTTP request to external API with error handling and fallback
    * @param {string} endpoint - API endpoint
    * @param {Object} params - Query parameters
    * @returns {Promise<Object>} - API response
@@ -108,6 +108,53 @@ class FlightService {
   async makeApiRequest(endpoint, params = {}) {
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Check if fallback mode is disabled
+    if (!this.fallbackEnabled) {
+      return this.makeDirectApiRequest(requestId, endpoint, params);
+    }
+
+    try {
+      const response = await this.makeDirectApiRequest(requestId, endpoint, params);
+
+      // If we were in fallback mode and now it works, log recovery
+      if (this.fallbackMode) {
+        logger.info(`External API recovered, exiting fallback mode [${requestId}]`);
+        this.fallbackMode = false;
+      }
+
+      return response;
+
+    } catch (error) {
+      logger.warn(`External API failed, checking fallback mode [${requestId}]`, {
+        error: error.message,
+        fallbackEnabled: this.fallbackEnabled,
+        currentlyInFallback: this.fallbackMode
+      });
+
+      // Check if we should use fallback
+      if (this.shouldUseFallback(error)) {
+        if (!this.fallbackMode) {
+          logger.warn(`Entering fallback mode due to external API failure [${requestId}]`);
+          this.fallbackMode = true;
+        }
+
+        // Throw a specific error to trigger fallback
+        throw new Error(`FALLBACK_MODE: ${error.message}`);
+      }
+
+      // Re-throw the error if fallback is not appropriate
+      throw error;
+    }
+  }
+
+  /**
+   * Make direct HTTP request to external API
+   * @param {string} requestId - Request identifier for logging
+   * @param {string} endpoint - API endpoint
+   * @param {Object} params - Query parameters
+   * @returns {Promise<Object>} - API response
+   */
+  async makeDirectApiRequest(requestId, endpoint, params = {}) {
     try {
       // Validate API key
       if (!this.apiKey) {
@@ -183,6 +230,47 @@ class FlightService {
         throw new Error(`Flight service error: ${error.message}`);
       }
     }
+  }
+
+  /**
+   * Determine if fallback should be used based on error
+   * @param {Error} error - The error that occurred
+   * @returns {boolean} - Whether to use fallback
+   */
+  shouldUseFallback(error) {
+    const errorMessage = error.message.toLowerCase();
+
+    // Use fallback for these error types
+    const fallbackErrors = [
+      'flight api request timed out',
+      'flight service temporarily unavailable',
+      'rate limit exceeded',
+      'connection refused',
+      'enotfound',
+      'econnreset',
+      'timeout'
+    ];
+
+    return fallbackErrors.some(fallbackError =>
+      errorMessage.includes(fallbackError)
+    );
+  }
+
+  /**
+   * Check if currently in fallback mode
+   * @returns {boolean} - Whether fallback mode is active
+   */
+  isInFallbackMode() {
+    return this.fallbackMode;
+  }
+
+  /**
+   * Enable or disable fallback mode
+   * @param {boolean} enabled - Whether to enable fallback mode
+   */
+  setFallbackMode(enabled) {
+    this.fallbackMode = enabled;
+    logger.info(`Fallback mode ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
