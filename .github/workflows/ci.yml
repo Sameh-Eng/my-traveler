@@ -1,0 +1,477 @@
+name: 🔍 Continuous Integration
+
+on:
+  push:
+    branches: [main, develop, staging]
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: us-east-1
+
+jobs:
+  # =======================================
+  # CODE QUALITY JOB
+  # =======================================
+  code-quality:
+    name: 🔍 Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # =======================================
+      # STEP 2: Setup Node.js
+      # =======================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # =======================================
+      # STEP 3: Install Dependencies
+      # =======================================
+      - name: 📦 Install Dependencies
+        run: |
+          npm ci --prefer-offline --no-audit --no-fund
+          cd frontend && npm ci --prefer-offline --no-audit --no-fund
+          cd ../backend && npm ci --prefer-offline --no-audit --no-fund
+
+      # =======================================
+      # STEP 4: Run Linting
+      # =======================================
+      - name: 🔍 Run ESLint
+        run: |
+          cd frontend && npm run lint
+          cd ../backend && npm run lint
+
+      # =======================================
+      # STEP 5: Type Checking
+      # =======================================
+      - name: 📝 Run TypeScript Type Check
+        run: |
+          cd frontend && npm run type-check
+          cd ../backend && npm run type-check
+
+      # =======================================
+      # STEP 6: Code Formatting Check
+      # =======================================
+      - name: 🎨 Check Code Formatting
+        run: |
+          cd frontend && npm run format:check
+          cd ../backend && npm run format:check
+
+      # =======================================
+      # STEP 7: Security Audit
+      # =======================================
+      - name: 🔒 Security Audit
+        run: |
+          cd frontend && npm audit --audit-level high
+          cd ../backend && npm audit --audit-level high
+
+      # =======================================
+      # STEP 8: Check for Secrets
+      # =======================================
+      - name: 🕵️ Check for Secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+
+  # =======================================
+  # TESTING JOB
+  # =======================================
+  testing:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_mytraveler
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # =======================================
+      # STEP 2: Setup Node.js
+      # =======================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # =======================================
+      # STEP 3: Install Dependencies
+      # =======================================
+      - name: 📦 Install Dependencies
+        run: |
+          cd frontend && npm ci --prefer-offline --no-audit --no-fund
+          cd ../backend && npm ci --prefer-offline --no-audit --no-fund
+
+      # =======================================
+      # STEP 4: Setup Test Database
+      # =======================================
+      - name: 🗄️ Setup Test Database
+        run: |
+          cd backend
+          npm run db:migrate:test
+
+      # =======================================
+      # STEP 5: Run Unit Tests
+      # =======================================
+      - name: 🧪 Run Unit Tests
+        run: |
+          cd frontend && npm run test:unit:coverage
+          cd ../backend && npm run test:unit:coverage
+
+      # =======================================
+      # STEP 6: Run Integration Tests
+      # =======================================
+      - name: 🔗 Run Integration Tests
+        run: |
+          cd backend && npm run test:integration:coverage
+
+      # =======================================
+      # STEP 7: Run E2E Tests
+      # =======================================
+      - name: 🌐 Run E2E Tests
+        run: |
+          cd frontend && npm run test:e2e
+
+      # =======================================
+      # STEP 8: Upload Coverage Reports
+      # =======================================
+      - name: 📊 Upload Coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/lcov.info,./backend/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # =======================================
+  # BUILD TEST JOB
+  # =======================================
+  build-test:
+    name: 🔨 Build Test
+    runs-on: ubuntu-latest
+    needs: [code-quality, testing]
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # =======================================
+      # STEP 2: Setup Node.js
+      # =======================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # =======================================
+      # STEP 3: Install Dependencies
+      # =======================================
+      - name: 📦 Install Dependencies
+        run: |
+          cd frontend && npm ci --prefer-offline --no-audit --no-fund
+          cd ../backend && npm ci --prefer-offline --no-audit --no-fund
+
+      # =======================================
+      # STEP 4: Build Frontend
+      # =======================================
+      - name: 🔨 Build Frontend
+        run: |
+          cd frontend
+          npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+          NEXT_PUBLIC_PAYMOB_IFRAME: ${{ secrets.STAGING_PAYMOB_IFRAME }}
+
+      # =======================================
+      # STEP 5: Build Backend
+      # =======================================
+      - name: 🔨 Build Backend
+        run: |
+          cd backend
+          npm run build
+        env:
+          NODE_ENV: production
+
+      # =======================================
+      # STEP 6: Test Docker Build
+      # =======================================
+      - name: 🐳 Test Docker Build (Frontend)
+        run: |
+          docker build -f Dockerfile.frontend -t mytraveler-frontend:test .
+
+      - name: 🐳 Test Docker Build (Backend)
+        run: |
+          cd backend
+          docker build -f Dockerfile.prod -t mytraveler-backend:test .
+
+      # =======================================
+      # STEP 7: Container Security Scan
+      # =======================================
+      - name: 🔍 Container Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: mytraveler-frontend:test
+          format: 'sarif'
+          output: 'trivy-frontend-results.sarif'
+
+      - name: 🔍 Container Security Scan (Backend)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: mytraveler-backend:test
+          format: 'sarif'
+          output: 'trivy-backend-results.sarif'
+
+  # =======================================
+  # PERFORMANCE TEST JOB
+  # =======================================
+  performance-test:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # =======================================
+      # STEP 2: Start Test Environment
+      # =======================================
+      - name: 🚀 Start Test Environment
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 30
+
+      # =======================================
+      # STEP 3: Run Lighthouse CI
+      # =======================================
+      - name: 🌟 Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli@0.12.x
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      # =======================================
+      # STEP 4: Run API Performance Tests
+      # =======================================
+      - name: ⚡ API Performance Tests
+        run: |
+          npm install -g artillery@2.0.0
+          artillery run tests/performance/api-load-test.yml
+
+      # =======================================
+      # STEP 5: Cleanup
+      # =======================================
+      - name: 🧹 Cleanup Test Environment
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+
+  # =======================================
+  # SECURITY SCAN JOB
+  # =======================================
+  security-scan:
+    name: 🔒 Security Scans
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # =======================================
+      # STEP 2: Run Snyk Security Scan
+      # =======================================
+      - name: 🔍 Run Snyk to check for vulnerabilities
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      # =======================================
+      # STEP 3: Run CodeQL Analysis
+      # =======================================
+      - name: 🔍 Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, typescript
+
+      - name: 🔍 Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+      # =======================================
+      # STEP 4: OWASP ZAP Security Scan
+      # =======================================
+      - name: 🕷️ OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:3000'
+
+  # =======================================
+  # DEPENDENCY CHECK JOB
+  # =======================================
+  dependency-check:
+    name: 📦 Dependency Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # =======================================
+      # STEP 1: Checkout Code
+      # =======================================
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      # =======================================
+      # STEP 2: Setup Node.js
+      # =======================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # =======================================
+      # STEP 3: Install Dependencies
+      # =======================================
+      - name: 📦 Install Dependencies
+        run: |
+          cd frontend && npm ci --prefer-offline --no-audit --no-fund
+          cd ../backend && npm ci --prefer-offline --no-audit --no-fund
+
+      # =======================================
+      # STEP 4: Check for Outdated Dependencies
+      # =======================================
+      - name: 📅 Check for Outdated Dependencies
+        run: |
+          cd frontend && npm outdated || true
+          cd ../backend && npm outdated || true
+
+      # =======================================
+      # STEP 5: License Check
+      # =======================================
+      - name: 📄 Check Package Licenses
+        run: |
+          npm install -g license-checker
+          cd frontend && license-checker --summary
+          cd ../backend && license-checker --summary
+
+  # =======================================
+  # NOTIFICATION JOB
+  # =======================================
+  notify:
+    name: 📢 CI Results
+    runs-on: ubuntu-latest
+    needs: [code-quality, testing, build-test, security-scan, dependency-check]
+    if: always()
+
+    steps:
+      # =======================================
+      # STEP 1: Notify on Success
+      # =======================================
+      - name: ✅ Notify Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#ci'
+          text: |
+            ✅ MyTraveler CI Passed
+
+            🔍 Code Quality: ${{ needs.code-quality.result }}
+            🧪 Testing: ${{ needs.testing.result }}
+            🔨 Build Test: ${{ needs.build-test.result }}
+            🔒 Security Scan: ${{ needs.security-scan.result }}
+            📦 Dependency Check: ${{ needs.dependency-check.result }}
+
+            🌿 Branch: ${{ github.ref }}
+            👤 Author: ${{ github.actor }}
+            🔗 PR: #${{ github.event.pull_request.number || 'N/A' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # =======================================
+      # STEP 2: Notify on Failure
+      # =======================================
+      - name: ❌ Notify Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#ci'
+          text: |
+            ❌ MyTraveler CI Failed
+
+            🔍 Code Quality: ${{ needs.code-quality.result }}
+            🧪 Testing: ${{ needs.testing.result }}
+            🔨 Build Test: ${{ needs.build-test.result }}
+            🔒 Security Scan: ${{ needs.security-scan.result }}
+            📦 Dependency Check: ${{ needs.dependency-check.result }}
+
+            🌿 Branch: ${{ github.ref }}
+            👤 Author: ${{ github.actor }}
+            🔗 PR: #${{ github.event.pull_request.number || 'N/A' }}
+
+            🔍 Check the Actions tab for details.
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# =======================================
+# WORKFLOW CONFIGURATION
+# =======================================
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
