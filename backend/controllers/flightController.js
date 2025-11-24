@@ -594,24 +594,25 @@ class FlightController {
    */
   async healthCheck(req, res) {
     try {
-      // Test external API connectivity
-      const startTime = Date.now();
-      await this.flightService.makeApiRequest('/airlines', { limit: 1 });
-      const responseTime = Date.now() - startTime;
+      // Get comprehensive service status including fallback mode
+      const serviceStatus = await this.flightService.getServiceStatus();
 
-      const cacheStats = await this.flightService.getCacheStats();
+      const statusCode = serviceStatus.success &&
+                         (serviceStatus.api.status === 'healthy' || serviceStatus.api.usingFallback)
+                         ? 200 : 503;
 
-      res.status(200).json({
-        success: true,
-        status: 'healthy',
+      const status = serviceStatus.success &&
+                     (serviceStatus.api.status === 'healthy' || serviceStatus.api.usingFallback)
+                     ? 'healthy' : 'degraded';
+
+      res.status(statusCode).json({
+        success: serviceStatus.success,
+        status: status,
         service: 'Flight Service',
         version: '1.0.0',
-        externalApi: {
-          status: 'connected',
-          responseTime: `${responseTime}ms`
-        },
-        cache: cacheStats,
-        timestamp: new Date().toISOString()
+        ...serviceStatus,
+        timestamp: new Date().toISOString(),
+        requestId: req.id
       });
 
     } catch (error) {
@@ -628,7 +629,8 @@ class FlightController {
         service: 'Flight Service',
         version: '1.0.0',
         error: error.message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        requestId: req.id
       });
     }
   }
