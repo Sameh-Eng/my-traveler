@@ -1,11 +1,13 @@
 /**
  * Flight Service - External API Integration with AviationStack
  * Handles flight search, details, and real-time status
+ * Includes fallback to mock data when external API fails
  */
 
 const axios = require('axios');
 const redis = require('redis');
 const logger = require('../utils/logger');
+const FlightMockData = require('./flightMockData');
 
 class FlightService {
   constructor() {
