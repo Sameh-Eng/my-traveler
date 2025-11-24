@@ -1,24 +1,35 @@
 # Makefile for Docker operations
-# Simplified commands for building and managing Docker containers
+# Comprehensive commands for building and managing Docker containers
 
 .PHONY: help build build-backend build-frontend up down logs clean clean-images prune dev prod health test
 
 # Default target
 help:
-	@echo "Available commands:"
+	@echo "MyTraveler Docker Management"
+	@echo ""
+	@echo "Development Commands:"
 	@echo "  build         - Build both frontend and backend images"
 	@echo "  build-backend - Build backend image only"
 	@echo "  build-frontend - Build frontend image only"
 	@echo "  up            - Start all services"
 	@echo "  down          - Stop all services"
+	@echo "  dev           - Start development environment"
 	@echo "  logs          - Show logs for all services"
+	@echo "  health        - Check health of all services"
+	@echo "  test          - Run tests"
+	@echo ""
+	@echo "Production Commands:"
+	@echo "  prod          - Start production environment"
+	@echo "  prod-build    - Build production images"
+	@echo "  prod-deploy   - Deploy to production"
+	@echo "  deploy        - Deploy with zero downtime"
+	@echo ""
+	@echo "Management Commands:"
 	@echo "  clean         - Remove stopped containers"
 	@echo "  clean-images  - Remove unused Docker images"
 	@echo "  prune         - Remove all Docker data"
-	@echo "  dev           - Start development environment"
-	@echo "  prod          - Start production environment"
-	@echo "  health        - Check health of all services"
-	@echo "  test          - Run tests"
+	@echo "  backup-all    - Create complete backup"
+	@echo "  scan          - Security vulnerability scan"
 
 # =======================================
 # Build Commands
