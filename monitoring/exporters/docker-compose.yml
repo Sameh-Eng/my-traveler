@@ -1,0 +1,345 @@
+# MyTraveler - Exporters Stack for Prometheus
+# This file contains all the exporters needed for comprehensive monitoring
+
+version: '3.8'
+
+services:
+  # =======================================
+  # NODE EXPORTER - SYSTEM METRICS
+  # =======================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: mytraveler-node-exporter
+    restart: unless-stopped
+    pid: "host"
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.diskstats.ignored-devices=^(ram|loop|fd|(h|s|v)d[a-z]|nvme\\d+n\\d+p)\\d+$$'
+      - '--collector.netclass.ignored-devices=^(veth.*)$$'
+      - '--collector.netdev.device-exclude=^(veth.*)$$'
+      - '--collector.cpu.info'
+      - '--collector.meminfo'
+      - '--collector.stat'
+      - '--collector.diskstats'
+      - '--collector.filefd'
+      - '--collector.filesystem'
+      - '--collector.loadavg'
+      - '--collector.mdadm'
+      - '--collector.netdev'
+      - '--collector.netstat'
+      - '--collector.sockstat'
+      - '--collector.time'
+      - '--collector.timex'
+      - '--collector.vmstat'
+      - '--collector.ipvs'
+      - '--collector.buddyinfo'
+      - '--collector.zoneinfo'
+      - '--collector.wifi'
+      - '--collector.arp'
+      - '--collector.conntrack'
+      - '--collector.edac'
+      - '--collector entropy'
+      - '--collector.file-nr'
+      - '--collector.hwmon'
+      - '--collector.infiniband'
+      - '--collector.ipvs'
+      - '--collector.ksmd'
+      - '--collector.logind'
+      - '--collector.mdadm'
+      - '--collector.meminfo_numa'
+      - '--collector.mountstats'
+      - '--collector.nfs'
+      - '--collector.nfsd'
+      - '--collector.pressure'
+      - '--collector processes'
+      - '--collector.puppet'
+      - '--collector.qdisc'
+      - '--collector.rapl'
+      - '--collector.slabinfo'
+      - '--collector.softirqs'
+      - '--collector.stat'
+      - '--collector.textfile'
+      - '--collector.thermal-zone'
+      - '--collector.udp_queues'
+      - '--collector.uname'
+      - '--collector.vmstat'
+      - '--collector.wifi'
+      - '--collector.xfs'
+      - '--collector.zfs'
+      - '--collector.timex'
+      - '--collector.systemd'
+      - '--no-collector.bcache'
+      - '--no-collector.btrfs'
+      - '--no-collector.cgroup'
+      - '--no-collector.cpu'
+      - '--no-collector.cpufreq'
+      - '--no-collector.devstat'
+      - '--no-collector.dmi'
+      - '--no-collector.drbd'
+      - '--no-collector.fibrechannel'
+      - '--no-collector.hugepages'
+      - '--no-collector.infiniband'
+      - '--no-collector.interrupts'
+      - '--no-collector.ipmi'
+      - '--no-collector.netclass'
+      - '--no-collector.nfs'
+      - '--no-collector.nfsd'
+      - '--no-collector.nvme'
+      - '--no-collector.powersupplyclass'
+      - '--no-collector.powersupply'
+      - '--no-collector.runit'
+      - '--no-collector.schedstat'
+      - '--no-collector.supervisord'
+      - '--no-collector.tapestats'
+      - '--no-collector.udp_queues'
+      - '--no-collector.wifi'
+      - '--no-collector.xfs'
+      - '--no-collector.zfs'
+      - '--no-collector.conntrack'
+      - '--no-collector.cpu'
+      - '--no-collector.diskstats'
+      - '--no-collector.entropy'
+      - '--no-collector.filefd'
+      - '--no-collector.filesystem'
+      - '--no-collector.hwmon'
+      - '--no-collector.infiniband'
+      - '--no-collector.ipvs'
+      - '--no-collector.loadavg'
+      - '--no-collector.mdadm'
+      - '--no-collector.meminfo'
+      - '--no-collector.netdev'
+      - '--no-collector.netstat'
+      - '--no-collector.pressure'
+      - '--no-collector.processes'
+      - '--no-collector.sockstat'
+      - '--no-collector.stat'
+      - '--no-collector.textfile'
+      - '--no-collector.thermal-zone'
+      - '--no-collector.time'
+      - '--no-collector.timex'
+      - '--no-collector.udp_queues'
+      - '--no-collector.uname'
+      - '--no-collector.vmstat'
+      - '--no-collector.wifi'
+      - '--no-collector.xfs'
+      - '--no-collector.zfs'
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    networks:
+      - booking-net
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+  # =======================================
+  # POSTGRESQL EXPORTER
+  # =======================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: mytraveler-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-mytraveler}?sslmode=disable"
+      PG_EXPORTER_CONSTANT_DATABASES: "postgres"
+      PG_EXPORTER_DISCOVER_DATABASES: "false"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "true"
+      PG_EXPORTER_EXCLUDE_DATABASES: "template0,template1"
+      PG_EXPORTER_INCLUDE_DATABASES: "${DB_NAME:-mytraveler}"
+      PG_EXPORTER_DISABLE_SETTINGS_METRICS: "false"
+      PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
+      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres_exporter/queries.yml"
+      PG_EXPORTER_LOG_LEVEL: "info"
+    volumes:
+      - ./postgres-exporter/queries.yml:/etc/postgres_exporter/queries.yml:ro
+    ports:
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
+    networks:
+      - booking-net
+    depends_on:
+      - postgres
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+  # =======================================
+  # CADVISOR - CONTAINER METRICS
+  # =======================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: mytraveler-cadvisor
+    restart: unless-stopped
+    command:
+      - '--port=8080'
+      - '--docker=true'
+      - '--docker_only=true'
+      - '--docker_env_metadata_whitelist=DATABASE_URL,REDIS_URL,JWT_SECRET'
+      - '--storage_duration=2m0s'
+      - '--housekeeping_interval=10s'
+      - '--max_housekeeping_interval=1m0s'
+      - '--allow_dynamic_housekeeping=true'
+      - '--disable_metrics=percpu,sched,process,hugetlb,referenced_memory,cgroup,squat,disk,udp,tcp,advtcp,memory_numa,diskIO,rlimit'
+      - '--enable_metrics=cpu,cpuLoad,memory,diskIO,accelerator,app,process'
+      - '--event_storage_event_limit=default=1000'
+      - '--event_storage_age_limit=default=48h'
+      - '--cgroup_prefix=/docker'
+      - '--raw_cgroup_prefix_whitelist=/docker'
+      - '--store_container_labels=false'
+      - '--whitelisted_container_labels=io.kubernetes.container.name,io.kubernetes.pod.name'
+      - '--collector.proc=/host/proc'
+      - '--path_sysfs=/host/sys'
+      - '--path_cgroup=/sys/fs/cgroup'
+      - '--path_rootfs=/rootfs'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      - "${CADVISOR_PORT:-8080}:8080"
+    networks:
+      - booking-net
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+  # =======================================
+  # BLACKBOX EXPORTER - EXTERNAL MONITORING
+  # =======================================
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: mytraveler-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+      - '--web.listen-address=:9115'
+      - '--web.external-url=http://localhost:9115'
+      - '--timeout=15s'
+      - '--log.level=info'
+    volumes:
+      - ./blackbox-exporter/config.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "${BLACKBOX_EXPORTER_PORT:-9115}:9115"
+    networks:
+      - booking-net
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+  # =======================================
+  # NGINX EXPORTER
+  # =======================================
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: mytraveler-nginx-exporter
+    restart: unless-stopped
+    command:
+      - '-nginx.scrape-uri=http://nginx:8080/nginx_status'
+      - '-nginx.retries=3'
+      - '-nginx.timeout=5s'
+      - '-web.listen-address=:9113'
+      - '-web.telemetry-path=/metrics'
+      - '-log.level=info'
+    ports:
+      - "${NGINX_EXPORTER_PORT:-9113}:9113"
+    networks:
+      - booking-net
+    depends_on:
+      - nginx
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 16M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+  # =======================================
+  # DOCKER STATSD EXPORTER
+  # =======================================
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: mytraveler-statsd-exporter
+    restart: unless-stopped
+    command:
+      - '--statsd.listen-udp=:9125'
+      - '--statsd.listen-tcp=:9125'
+      - '--web.listen-address=:9102'
+      - '--web.telemetry-path=/metrics'
+      - '--statsd.event-flush-interval=5s'
+      - '--statsd.event-Flush-threshold=100'
+      - '--statsd.add-suffix=false'
+      - '--statsd.mapping-config=/etc/statsd_mapping.yml'
+      - '--log.level=info'
+    volumes:
+      - ./statsd/mapping.yml:/etc/statsd_mapping.yml:ro
+    ports:
+      - "${STATSD_EXPORTER_PORT:-9102}:9102"
+      - "${STATSD_UDP_PORT:-9125}:9125/udp"
+    networks:
+      - booking-net
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 16M
+          cpus: '0.05'
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  booking-net:
+    external: true
