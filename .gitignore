@@ -1,1 +1,10 @@
 node_modules
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.prod
+backend/.env
+.next/
+node_modules/

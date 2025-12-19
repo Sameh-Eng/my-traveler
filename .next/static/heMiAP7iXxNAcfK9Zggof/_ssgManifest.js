@@ -1,1 +1,0 @@
-self.__SSG_MANIFEST=new Set(["\u002Fdashboard\u002Fbookings\u002F[id]","\u002Fflights\u002F[id]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()
