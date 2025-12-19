@@ -28,6 +28,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_PAYMOB_IFRAME=$NEXT_PUBLIC_PAYMOB_IFRAME
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Ensure public folder exists
+RUN mkdir -p public
+
 # Build the application
 RUN npm run build
 
@@ -50,7 +53,8 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
+# Copy built application (create public if it doesn't exist)
+RUN mkdir -p /app/public
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
