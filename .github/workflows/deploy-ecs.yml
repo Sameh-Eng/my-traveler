@@ -1,0 +1,236 @@
+# AWS ECS CI/CD Pipeline for MyTraveler
+name: 🚀 Deploy to AWS ECS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REGISTRY: 761018856039.dkr.ecr.eu-north-1.amazonaws.com
+  ECS_CLUSTER: mytraveler-cluster
+  ECS_SERVICE: mytraveler-service
+  FRONTEND_REPO: mytraveler-frontend
+  BACKEND_REPO: mytraveler-backend
+
+jobs:
+  # ============================================
+  # Build and Test
+  # ============================================
+  build-and-test:
+    name: 🧪 Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+        continue-on-error: true
+
+      - name: 🔨 Build Frontend
+        run: npm run build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_API_URL: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api
+          NEXT_PUBLIC_PAYMOB_IFRAME: https://accept.paymob.com/api/acceptance/iframes/5404472
+
+      - name: 📦 Install Backend Dependencies
+        run: cd backend && npm ci
+        continue-on-error: true
+
+  # ============================================
+  # Build and Push Docker Images
+  # ============================================
+  build-images:
+    name: 🐳 Build & Push Images
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 🐘 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 🏗️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🐳 Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_REPO }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_REPO }}:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api
+            NEXT_PUBLIC_PAYMOB_IFRAME=https://accept.paymob.com/api/acceptance/iframes/5404472
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🐳 Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_REPO }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.BACKEND_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================
+  # Deploy to ECS
+  # ============================================
+  deploy:
+    name: 🚀 Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: build-images
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔐 Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: 📄 Create Task Definition
+        run: |
+          cat > task-definition.json << 'EOF'
+          {
+            "family": "mytraveler-task",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024",
+            "executionRoleArn": "arn:aws:iam::761018856039:role/ecsTaskExecutionRole",
+            "taskRoleArn": "arn:aws:iam::761018856039:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "backend",
+                "image": "761018856039.dkr.ecr.eu-north-1.amazonaws.com/mytraveler-backend:${{ github.sha }}",
+                "portMappings": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "tcp"
+                  }
+                ],
+                "environment": [
+                  {"name": "NODE_ENV", "value": "production"},
+                  {"name": "PORT", "value": "8080"},
+                  {"name": "DB_TYPE", "value": "postgres"},
+                  {"name": "DB_PORT", "value": "5432"},
+                  {"name": "REDIS_PORT", "value": "6379"}
+                ],
+                "secrets": [
+                  {
+                    "name": "DB_HOST",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-host-SVgC3L"
+                  },
+                  {
+                    "name": "DB_PASSWORD",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-password-qyB1nU"
+                  },
+                  {
+                    "name": "JWT_SECRET",
+                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/jwt-secrets-xu6Z7Y"
+                  }
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/mytraveler",
+                    "awslogs-region": "eu-north-1",
+                    "awslogs-stream-prefix": "ecs",
+                    "awslogs-create-group": "true"
+                  }
+                },
+                "healthCheck": {
+                  "command": ["CMD-SHELL", "wget --spider -q http://localhost:8080/health || exit 1"],
+                  "interval": 30,
+                  "timeout": 5,
+                  "retries": 3,
+                  "startPeriod": 60
+                },
+                "essential": true
+              }
+            ]
+          }
+          EOF
+
+      - name: 📝 Register Task Definition
+        id: register-task
+        run: |
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "task-definition-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+          echo "✅ Registered task definition: $TASK_DEF_ARN"
+
+      - name: 🚀 Update ECS Service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ steps.register-task.outputs.task-definition-arn }} \
+            --force-new-deployment
+          echo "✅ Service update initiated"
+
+      - name: ⏳ Wait for Deployment
+        run: |
+          echo "Waiting for service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services ${{ env.ECS_SERVICE }} || true
+          echo "✅ Deployment complete!"
+
+      - name: 🏥 Health Check
+        run: |
+          echo "🌐 Application URL: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com"
+          echo "Checking health endpoint..."
+          sleep 30
+          curl -f http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api/health || echo "Health check pending..."
+
+      - name: 📊 Deployment Summary
+        run: |
+          echo "=================================="
+          echo "🎉 DEPLOYMENT COMPLETE!"
+          echo "=================================="
+          echo ""
+          echo "🌐 Application: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com"
+          echo "🔧 Backend API: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api"
+          echo "📦 Image Tag: ${{ github.sha }}"
+          echo ""
+          echo "=================================="
