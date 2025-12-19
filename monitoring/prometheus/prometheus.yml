@@ -1,0 +1,407 @@
+# MyTraveler - Prometheus Configuration
+# Scrapes metrics from all application services and system exporters
+
+global:
+  # Default scrape interval
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  # External labels
+  external_labels:
+    cluster: 'mytraveler-production'
+    environment: '${NODE_ENV:-production}'
+    region: 'us-east-1'
+
+# Rule files for alerting
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+  - "/etc/prometheus/rules/*.yaml"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Scrape configurations
+scrape_configs:
+  # =======================================
+  # PROMETHEUS SELF MONITORING
+  # =======================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+    honor_labels: true
+    honor_timestamps: true
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'prometheus-server'
+
+  # =======================================
+  # MYTRAVELER BACKEND APPLICATION METRICS
+  # =======================================
+  - job_name: 'mytraveler-backend'
+    static_configs:
+      - targets: ['backend:8080']
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: http
+    honor_labels: true
+
+    # Custom headers for authentication if needed
+    params:
+      format: ['prometheus']
+
+    # Relabeling for better metric identification
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'backend-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'mytraveler-backend'
+      - source_labels: [__address__]
+        target_label: version
+        replacement: '${APP_VERSION:-1.0.0}'
+
+    # Metric relabeling to filter noise
+    metric_relabel_configs:
+      # Drop high-cardinality metrics if needed
+      - source_labels: [__name__]
+        regex: 'http_request_duration_seconds_bucket.*le="[0-9]+\.[0-9]+e\-[0-9]+"'
+        action: drop
+
+  # =======================================
+  # POSTGRESQL DATABASE METRICS
+  # =======================================
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+
+    # Connection info
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgres-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'postgresql'
+      - source_labels: [__address__]
+        target_label: db_cluster
+        replacement: 'mytraveler-db'
+
+    # Database-specific metric filtering
+    metric_relabel_configs:
+      # Keep only relevant database metrics
+      - source_labels: [__name__]
+        regex: 'pg_stat_database_.*|pg_settings_.*|pg_locks_.*|pg_stat_user_tables_.*'
+        action: keep
+
+  # =======================================
+  # NODE EXPORTER - SYSTEM METRICS
+  # =======================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-host-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'node-exporter'
+
+    # System metrics filtering
+    metric_relabel_configs:
+      # Keep important system metrics
+      - source_labels: [__name__]
+        regex: 'node_cpu_.*|node_memory_.*|node_disk_.*|node_network_.*|node_filesystem_.*|node_load.*|process_.*'
+        action: keep
+
+  # =======================================
+  # REDIS METRICS EXPORTER
+  # =======================================
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: http
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'redis'
+      - source_labels: [__address__]
+        target_label: redis_cluster
+        replacement: 'mytraveler-redis'
+
+  # =======================================
+  # NGINX METRICS
+  # =======================================
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: http
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'nginx-proxy-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'nginx'
+
+  # =======================================
+  # DOCKER CONTAINER METRICS
+  # =======================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+
+    # Docker container filtering
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-host-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'cadvisor'
+
+    # Keep only MyTraveler containers
+    metric_relabel_configs:
+      - source_labels: [name]
+        regex: '.*mytraveler.*'
+        action: keep
+
+  # =======================================
+  # GRAFANA METRICS
+  # =======================================
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: http
+    basic_auth:
+      username: '${GRAFANA_USER:-admin}'
+      password: '${GRAFANA_PASSWORD}'
+
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'grafana-01'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'grafana'
+
+  # =======================================
+  # BLACKBOX EXPORTER - ENDPOINT MONITORING
+  # =======================================
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://frontend:3000/health
+        - http://backend:8080/health
+        - http://backend:8080/api/flights/search
+        - http://backend:8080/api/bookings
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 'blackbox-exporter:9115'
+
+  # =======================================
+  # BLACKBOX EXPORTER - TCP MONITORING
+  # =======================================
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+        - postgres:5432
+        - redis:6379
+        - backend:8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 'blackbox-exporter:9115'
+
+  # =======================================
+  # KUBERNETES METRICS (if applicable)
+  # =======================================
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+# =======================================
+# REMOTE WRITE CONFIGURATION (for long-term storage)
+# =======================================
+# remote_write:
+#   - url: "http://cortex:9009/api/v1/push"
+#     basic_auth:
+#       username: ${CORTEX_USERNAME}
+#       password: ${CORTEX_PASSWORD}
+#     queue_config:
+#       max_samples_per_send: 1000
+#       max_shards: 200
+#       capacity: 2500
+
+# =======================================
+# REMOTE READ CONFIGURATION (for historical data)
+# =======================================
+# remote_read:
+#   - url: "http://cortex:9009/api/v1/read"
+#     read_recent: true
+#     basic_auth:
+#       username: ${CORTEX_USERNAME}
+#       password: ${CORTEX_PASSWORD}
+
+# =======================================
+# STORAGE CONFIGURATION
+# =======================================
+# Configure TSDB (Time Series Database)
+storage:
+  tsdb:
+    # Data retention period
+    retention.time: 30d
+    retention.size: 10GB
+
+    # WAL configuration
+    wal:
+      enabled: true
+      dir: "/prometheus/wal"
+      checkpoint_interval: 5m
+      min_wal_lag: 2m
+
+    # Memory mapping configuration
+    mmap_chunks: true
+    head_chunks_write_queue_size: 0
+    max_chunks_per_series: 262144
+
+    # Compression
+    compress_chunks: true
+
+# =======================================
+# WEB CONFIGURATION
+# =======================================
+web:
+  # External URL configuration
+  external_url: "http://localhost:9090"
+
+  # Page title
+  page_title: "MyTraveler Prometheus"
+
+  # Admin settings
+  enable_admin_api: true
+  enable_lifecycle: true
+
+  # CORS settings
+  cors:
+    origins: ["*"]
+
+  # Security headers
+  headers:
+    Content-Security-Policy: "default-src 'self'"
+    X-Content-Type-Options: "nosniff"
+    X-XSS-Protection: "1; mode=block"
+
+# =======================================
+# QUERY CONFIGURATION
+# =======================================
+query:
+  # Maximum concurrency
+  max_concurrent_queries: 20
+
+  # Query timeout
+  timeout: 2m
+
+  # Maximum samples per query
+  max_samples: 50000000
+
+  # Lookback delta for staleness handling
+  lookback-delta: 5m
