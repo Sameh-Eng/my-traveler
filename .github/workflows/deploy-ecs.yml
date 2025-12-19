@@ -13,10 +13,10 @@ on:
         type: boolean
 
 env:
-  AWS_REGION: eu-north-1
-  ECR_REGISTRY: 761018856039.dkr.ecr.eu-north-1.amazonaws.com
-  ECS_CLUSTER: mytraveler-cluster
-  ECS_SERVICE: mytraveler-service
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 416783822569.dkr.ecr.us-east-1.amazonaws.com
+  ECS_CLUSTER: mytraveler-clusterr
+  ECS_SERVICE: mytraveler-servicee
   FRONTEND_REPO: mytraveler-frontend
   BACKEND_REPO: mytraveler-backend
 
@@ -46,7 +46,7 @@ jobs:
         run: npm run build
         continue-on-error: true
         env:
-          NEXT_PUBLIC_API_URL: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api
+          NEXT_PUBLIC_API_URL: http://localhost:8080/api
           NEXT_PUBLIC_PAYMOB_IFRAME: https://accept.paymob.com/api/acceptance/iframes/5404472
 
       - name: 📦 Install Backend Dependencies
@@ -89,7 +89,7 @@ jobs:
             ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_REPO }}:${{ github.sha }}
             ${{ env.ECR_REGISTRY }}/${{ env.FRONTEND_REPO }}:latest
           build-args: |
-            NEXT_PUBLIC_API_URL=http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api
+            NEXT_PUBLIC_API_URL=http://localhost:8080/api
             NEXT_PUBLIC_PAYMOB_IFRAME=https://accept.paymob.com/api/acceptance/iframes/5404472
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -134,12 +134,12 @@ jobs:
             "requiresCompatibilities": ["FARGATE"],
             "cpu": "512",
             "memory": "1024",
-            "executionRoleArn": "arn:aws:iam::761018856039:role/ecsTaskExecutionRole",
-            "taskRoleArn": "arn:aws:iam::761018856039:role/ecsTaskExecutionRole",
+            "executionRoleArn": "arn:aws:iam::416783822569:role/ecsTaskExecutionRole",
+            "taskRoleArn": "arn:aws:iam::416783822569:role/ecsTaskExecutionRole",
             "containerDefinitions": [
               {
                 "name": "backend",
-                "image": "761018856039.dkr.ecr.eu-north-1.amazonaws.com/mytraveler-backend:${{ github.sha }}",
+                "image": "416783822569.dkr.ecr.us-east-1.amazonaws.com/mytraveler-backend:${{ github.sha }}",
                 "portMappings": [
                   {
                     "containerPort": 8080,
@@ -151,27 +151,30 @@ jobs:
                   {"name": "PORT", "value": "8080"},
                   {"name": "DB_TYPE", "value": "postgres"},
                   {"name": "DB_PORT", "value": "5432"},
-                  {"name": "REDIS_PORT", "value": "6379"}
+                  {"name": "DB_NAME", "value": "mytraveler"},
+                  {"name": "DB_USER", "value": "mytraveler_admin"},
+                  {"name": "REDIS_PORT", "value": "6379"},
+                  {"name": "REDIS_HOST", "value": "mytraveler-redis-butsk7.serverless.use1.cache.amazonaws.com"}
                 ],
                 "secrets": [
                   {
                     "name": "DB_HOST",
-                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-host-SVgC3L"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/db-host-y2z7d8"
                   },
                   {
                     "name": "DB_PASSWORD",
-                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-password-qyB1nU"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/db-password-oYK68R"
                   },
                   {
                     "name": "JWT_SECRET",
-                    "valueFrom": "arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/jwt-secrets-xu6Z7Y"
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/jwt-secret-Wml0Em"
                   }
                 ],
                 "logConfiguration": {
                   "logDriver": "awslogs",
                   "options": {
                     "awslogs-group": "/ecs/mytraveler",
-                    "awslogs-region": "eu-north-1",
+                    "awslogs-region": "us-east-1",
                     "awslogs-stream-prefix": "ecs",
                     "awslogs-create-group": "true"
                   }
@@ -216,21 +219,18 @@ jobs:
             --services ${{ env.ECS_SERVICE }} || true
           echo "✅ Deployment complete!"
 
-      - name: 🏥 Health Check
+      - name: 📊 Get ECS Task Public IP
         run: |
-          echo "🌐 Application URL: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com"
-          echo "Checking health endpoint..."
-          sleep 30
-          curl -f http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api/health || echo "Health check pending..."
-
-      - name: 📊 Deployment Summary
-        run: |
-          echo "=================================="
+          echo "Getting ECS task public IP..."
+          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_SERVICE }} --query 'taskArns[0]' --output text)
+          ENI_ID=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+          PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+          echo "==================================="
           echo "🎉 DEPLOYMENT COMPLETE!"
-          echo "=================================="
+          echo "==================================="
           echo ""
-          echo "🌐 Application: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com"
-          echo "🔧 Backend API: http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api"
+          echo "🌐 Frontend: http://$PUBLIC_IP:3000"
+          echo "🔧 Backend API: http://$PUBLIC_IP:8080/api"
           echo "📦 Image Tag: ${{ github.sha }}"
           echo ""
-          echo "=================================="
+          echo "==================================="

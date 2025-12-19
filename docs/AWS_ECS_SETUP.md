@@ -112,18 +112,52 @@ Or create custom policy:
 1. Go to **RDS** → **Create database**
 
 ### Database Settings
+
+#### Engine & Template
 | Setting | Value |
 |---------|-------|
-| **Engine** | PostgreSQL |
-| **Version** | 15.x |
-| **Template** | Free tier (or Production) |
+| **Creation method** | Full configuration |
+| **Engine type** | PostgreSQL |
+| **Engine version** | PostgreSQL 15.14-R2 |
+| **Template** | Dev/Test |
+| **Deployment option** | Single-AZ DB instance (1 instance) |
+
+#### Instance Settings
+| Setting | Value |
+|---------|-------|
 | **DB instance identifier** | `mytraveler-db` |
 | **Master username** | `mytraveler_admin` |
-| **Master password** | (Create a strong password) |
-| **DB instance class** | db.t3.micro (free tier) |
-| **Storage** | 20 GB gp2 |
-| **Public access** | No |
+| **Credentials management** | Self managed |
+| **Master password** | (Stored in AWS Secrets Manager) |
+| **DB instance class** | db.t3.micro (2 vCPUs, 1 GiB RAM) |
+| **Storage type** | General Purpose SSD (gp2) |
+| **Allocated storage** | 20 GiB |
+
+#### Connectivity
+| Setting | Value |
+|---------|-------|
+| **Compute resource** | Don't connect to EC2 |
+| **Network type** | IPv4 |
+| **VPC** | Create new VPC (or use default) |
+| **DB subnet group** | Create new DB Subnet Group |
+| **Public access** | Yes (for initial setup) or No (production) |
 | **VPC security group** | Create new |
+| **Database authentication** | Password authentication |
+
+#### Monitoring (Database Insights - Standard)
+| Setting | Value |
+|---------|-------|
+| **Performance Insights** | Enabled |
+| **Retention period** | 15 months |
+| **Enhanced Monitoring** | Enabled (60 seconds) |
+| **Log exports** | PostgreSQL log ✓ |
+
+#### Estimated Monthly Costs
+| Component | Cost |
+|-----------|------|
+| DB instance | ~$26.28 |
+| Storage | ~$4.60 |
+| **Total** | **~$30.88/month** |
 
 ### Note Your Endpoint
 After creation, note the endpoint:
@@ -161,40 +195,30 @@ mytraveler-redis.xxxxxx.cache.amazonaws.com:6379
 
 ---
 
-## ⚖️ Step 5: Create Application Load Balancer
+## ⚖️ Step 5: Create Security Group for ECS
 
-### Navigate to EC2 → Load Balancers
-1. Click **"Create load balancer"**
-2. Choose **"Application Load Balancer"**
+> **Note:** Application Load Balancers require a billing cycle on new AWS accounts. 
+> We'll deploy with **public IP directly on ECS tasks** instead.
 
-### Basic Configuration
+### Navigate to EC2 → Security Groups
+1. Click **"Create security group"**
+
+### Security Group Settings
 | Setting | Value |
 |---------|-------|
-| **Name** | `mytraveler-alb` |
-| **Scheme** | Internet-facing |
-| **IP address type** | IPv4 |
+| **Name** | `mytraveler-ecs-sg` |
+| **Description** | Security group for MyTraveler ECS tasks |
+| **VPC** | Your default VPC |
 
-### Network Mapping
-- **VPC:** Your default VPC
-- **Mappings:** Select at least 2 availability zones
+### Inbound Rules
+| Type | Port | Source | Description |
+|------|------|--------|-------------|
+| HTTP | 80 | 0.0.0.0/0 | Frontend access |
+| Custom TCP | 3000 | 0.0.0.0/0 | Next.js frontend |
+| Custom TCP | 8080 | 0.0.0.0/0 | Backend API |
 
-### Security Groups
-Create or select a security group that allows:
-- HTTP (80) from anywhere
-- HTTPS (443) from anywhere
-
-### Listeners and Routing
-
-**Create Target Group First:**
-1. Go to **Target Groups** → **Create target group**
-2. **Target type:** IP addresses
-3. **Name:** `mytraveler-tg`
-4. **Protocol:** HTTP, Port: 8080
-5. **Health check path:** `/health`
-6. Click **Create**
-
-**Back to ALB:**
-- Add listener: HTTP:80 → Forward to `mytraveler-tg`
+### Outbound Rules
+- Allow all traffic (default)
 
 ---
 
@@ -206,7 +230,7 @@ Create or select a security group that allows:
 ### Cluster Settings
 | Setting | Value |
 |---------|-------|
-| **Cluster name** | `mytraveler-cluster` |
+| **Cluster name** | `mytraveler-clusterr` |
 | **Infrastructure** | AWS Fargate (serverless) |
 
 Click **Create**
@@ -265,7 +289,7 @@ Click **Create**
 ## 🚀 Step 8: Create ECS Service
 
 ### Navigate to Your Cluster
-1. Go to **ECS** → **Clusters** → `mytraveler-cluster`
+1. Go to **ECS** → **Clusters** → `mytraveler-clusterr`
 2. Click **"Create"** (in Services tab)
 
 ### Service Settings
@@ -273,19 +297,19 @@ Click **Create**
 |---------|-------|
 | **Launch type** | FARGATE |
 | **Task definition** | `mytraveler-task` |
-| **Service name** | `mytraveler-service` |
+| **Service name** | `mytraveler-servicee` |
 | **Desired tasks** | 1 |
 
 ### Networking
 - **VPC:** Your default VPC
-- **Subnets:** Select 2+ subnets
-- **Security group:** Allow 8080 from ALB
+- **Subnets:** Select 1+ public subnets
+- **Security group:** `mytraveler-ecs-sg` (created in Step 5)
+- **Public IP:** ✅ **ENABLED** (Auto-assign public IP = ENABLED)
+
+> ⚠️ **Important:** Enable "Auto-assign public IP" to access your service without a load balancer!
 
 ### Load Balancing
-- **Load balancer type:** Application Load Balancer
-- **Load balancer:** `mytraveler-alb`
-- **Target group:** `mytraveler-tg`
-- **Container:** backend:8080
+- **Load balancer type:** None
 
 Click **Create**
 
@@ -327,17 +351,18 @@ arn:aws:secretsmanager:us-east-1:123456789012:secret:/mytraveler/prod/db-passwor
 
 | Secret Name | Your Value |
 |-------------|------------|
-| `AWS_ACCESS_KEY_ID` | (Your IAM user access key from Step 2) |
-| `AWS_SECRET_ACCESS_KEY` | (Your IAM user secret key from Step 2) |
-| `AWS_ACCOUNT_ID` | `761018856039` |
-| `AWS_REGION` | `eu-north-1` |
-| `ECS_CLUSTER_NAME` | `mytraveler-cluster` |
-| `ECS_SERVICE_NAME` | `mytraveler-service` |
-| `ECS_EXECUTION_ROLE_ARN` | `arn:aws:iam::761018856039:role/ecsTaskExecutionRole` |
-| `ECS_TASK_ROLE_ARN` | `arn:aws:iam::761018856039:role/ecsTaskExecutionRole` |
-| `LOAD_BALANCER_NAME` | `mytraveler-alb` |
-| `NEXT_PUBLIC_API_URL` | `http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com/api` |
-| `PRODUCTION_URL` | `http://mytraveler-alb-660460338.eu-north-1.elb.amazonaws.com` |
+| `AWS_ACCESS_KEY_ID` | `AKIAWCCSAN3U5YL3XEET` |
+| `AWS_SECRET_ACCESS_KEY` | (Your secret access key) |
+| `AWS_ACCOUNT_ID` | `416783822569` |
+| `AWS_REGION` | `us-east-1` |
+| `ECS_CLUSTER_NAME` | `mytraveler-clusterr` |
+| `ECS_SERVICE_NAME` | `mytraveler-servicee` |
+| `ECS_EXECUTION_ROLE_ARN` | `arn:aws:iam::416783822569:role/ecsTaskExecutionRole` |
+| `ECS_TASK_ROLE_ARN` | `arn:aws:iam::416783822569:role/ecsTaskExecutionRole` |
+| `NEXT_PUBLIC_API_URL` | `http://<ECS_TASK_PUBLIC_IP>:8080/api` |
+| `PRODUCTION_URL` | `http://<ECS_TASK_PUBLIC_IP>:3000` |
+
+> **Note:** After deploying, get your ECS task's public IP from the ECS Console and update `NEXT_PUBLIC_API_URL` and `PRODUCTION_URL`.
 
 ### How to Find ECS_EXECUTION_ROLE_ARN
 
@@ -374,16 +399,16 @@ aws iam attach-role-policy \
 
 Run this to get all your secret ARNs:
 ```bash
-aws secretsmanager list-secrets --region eu-north-1 \
+aws secretsmanager list-secrets --region us-east-1 \
   --query 'SecretList[].{Name:Name,ARN:ARN}' --output table
 ```
 
 | GitHub Secret Name | Secrets Manager ARN |
 |-------------------|---------------------|
-| `DB_HOST_ARN` | `arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-host-XXXXX` |
-| `DB_PASSWORD_ARN` | `arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/db-password-XXXXX` |
-| `JWT_SECRET_ARN` | `arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/jwt-secret-XXXXX` |
-| `REDIS_HOST_ARN` | `arn:aws:secretsmanager:eu-north-1:761018856039:secret:/mytraveler/prod/redis-host-XXXXX` |
+| `DB_HOST_ARN` | `arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/db-host-y2z7d8` |
+| `DB_PASSWORD_ARN` | `arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/db-password-oYK68R` |
+| `JWT_SECRET_ARN` | `arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/jwt-secret-Wml0Em` |
+| `REDIS_HOST_ARN` | `arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/redis-host-uXx3zQ` |
 
 ---
 
@@ -401,7 +426,7 @@ Now create the GitHub Actions workflow. I'll create this for you.
 | 2. Create IAM user + keys | ⬜ |
 | 3. Create RDS PostgreSQL | ⬜ |
 | 4. Create ElastiCache Redis | ⬜ |
-| 5. Create ALB | ⬜ |
+| 5. Create Security Group | ⬜ |
 | 6. Create ECS Cluster | ⬜ |
 | 7. Create Task Definition | ⬜ |
 | 8. Create ECS Service | ⬜ |
@@ -416,12 +441,13 @@ Now create the GitHub Actions workflow. I'll create this for you.
 | Service | Cost |
 |---------|------|
 | ECS Fargate (0.5 vCPU, 1GB) | ~$15 |
-| RDS db.t3.micro | ~$15 (or free tier) |
+| RDS db.t3.micro | ~$31 |
 | ElastiCache cache.t3.micro | ~$12 |
-| ALB | ~$20 |
 | ECR | ~$1 |
 | Secrets Manager | ~$2 |
-| **Total** | **~$65/month** |
+| **Total** | **~$61/month** |
+
+> 💰 **Savings:** ~$20/month by not using ALB!
 
 ---
 
