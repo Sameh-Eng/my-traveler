@@ -71,7 +71,14 @@ COPY --from=deps /etc/passwd /etc/passwd
 # Copy application files from builder
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules/
 COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
-COPY --from=builder --chown=nodejs:nodejs . .
+COPY --from=builder --chown=nodejs:nodejs /app/server.js ./
+COPY --from=builder --chown=nodejs:nodejs /app/routes ./routes/
+COPY --from=builder --chown=nodejs:nodejs /app/controllers ./controllers/
+COPY --from=builder --chown=nodejs:nodejs /app/middleware ./middleware/
+COPY --from=builder --chown=nodejs:nodejs /app/services ./services/
+COPY --from=builder --chown=nodejs:nodejs /app/models ./models/
+COPY --from=builder --chown=nodejs:nodejs /app/utils ./utils/
+COPY --from=builder --chown=nodejs:nodejs /app/database ./database/
 
 # Create app directories with proper permissions
 RUN mkdir -p /app/logs /app/uploads /app/tmp && \
