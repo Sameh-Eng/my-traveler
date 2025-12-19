@@ -220,11 +220,46 @@ jobs:
           echo "✅ Deployment complete!"
 
       - name: 📊 Get ECS Task Public IP
+        continue-on-error: true
         run: |
           echo "Getting ECS task public IP..."
-          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_SERVICE }} --query 'taskArns[0]' --output text)
-          ENI_ID=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
-          PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+          
+          # Wait a bit for task to start
+          sleep 60
+          
+          TASK_ARN=$(aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_SERVICE }} --query 'taskArns[0]' --output text 2>/dev/null || echo "None")
+          
+          if [ "$TASK_ARN" = "None" ] || [ -z "$TASK_ARN" ]; then
+            echo "⚠️ No running tasks found. Check ECS Console for task status."
+            echo ""
+            echo "🔍 Debug: Check the ECS Console for errors:"
+            echo "   1. Go to ECS → Clusters → ${{ env.ECS_CLUSTER }}"
+            echo "   2. Click on Service → ${{ env.ECS_SERVICE }}"
+            echo "   3. Check 'Tasks' tab and 'Events' tab for errors"
+            echo ""
+            
+            # List any stopped tasks for debugging
+            echo "Recent task activity:"
+            aws ecs list-tasks --cluster ${{ env.ECS_CLUSTER }} --service-name ${{ env.ECS_SERVICE }} --desired-status STOPPED --query 'taskArns' --output text || true
+            exit 0
+          fi
+          
+          echo "Found task: $TASK_ARN"
+          
+          ENI_ID=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$ENI_ID" ]; then
+            echo "⚠️ Could not find network interface. Task may still be starting."
+            exit 0
+          fi
+          
+          PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text 2>/dev/null || echo "")
+          
+          if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "None" ]; then
+            echo "⚠️ No public IP assigned. Check if 'Auto-assign public IP' is enabled."
+            exit 0
+          fi
+          
           echo "==================================="
           echo "🎉 DEPLOYMENT COMPLETE!"
           echo "==================================="
@@ -234,3 +269,4 @@ jobs:
           echo "📦 Image Tag: ${{ github.sha }}"
           echo ""
           echo "==================================="
+
