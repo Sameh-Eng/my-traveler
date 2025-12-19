@@ -132,8 +132,8 @@ jobs:
             "family": "mytraveler-task",
             "networkMode": "awsvpc",
             "requiresCompatibilities": ["FARGATE"],
-            "cpu": "512",
-            "memory": "1024",
+            "cpu": "1024",
+            "memory": "2048",
             "executionRoleArn": "arn:aws:iam::416783822569:role/ecsTaskExecutionRole",
             "taskRoleArn": "arn:aws:iam::416783822569:role/ecsTaskExecutionRole",
             "containerDefinitions": [
@@ -175,7 +175,7 @@ jobs:
                   "options": {
                     "awslogs-group": "/ecs/mytraveler",
                     "awslogs-region": "us-east-1",
-                    "awslogs-stream-prefix": "ecs",
+                    "awslogs-stream-prefix": "backend",
                     "awslogs-create-group": "true"
                   }
                 },
@@ -187,6 +187,31 @@ jobs:
                   "startPeriod": 60
                 },
                 "essential": true
+              },
+              {
+                "name": "frontend",
+                "image": "416783822569.dkr.ecr.us-east-1.amazonaws.com/mytraveler-frontend:${{ github.sha }}",
+                "portMappings": [
+                  {
+                    "containerPort": 3000,
+                    "protocol": "tcp"
+                  }
+                ],
+                "environment": [
+                  {"name": "NODE_ENV", "value": "production"},
+                  {"name": "PORT", "value": "3000"},
+                  {"name": "NEXT_PUBLIC_API_URL", "value": "http://localhost:8080/api"}
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/mytraveler",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "frontend",
+                    "awslogs-create-group": "true"
+                  }
+                },
+                "essential": false
               }
             ]
           }
