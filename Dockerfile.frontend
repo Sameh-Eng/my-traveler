@@ -10,8 +10,8 @@ WORKDIR /app
 COPY package*.json ./
 ENV CYPRESS_INSTALL_BINARY=0
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Install ALL dependencies (needed for build)
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:18-alpine AS builder
