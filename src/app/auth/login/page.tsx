@@ -167,8 +167,8 @@ const LoginPage = () => {
                   </svg>
                   Continue with Google
                 </Button>
-                <p className="text-xs text-center text-amber-600">
-                  ⚠️ Google login works in development. Production support coming soon!
+                <p className="text-xs text-center text-green-600">
+                  🔐 Security Note: Try login with Google - it's safer! We are working on getting the SSL certificate soon.
                 </p>
               </div>
 
