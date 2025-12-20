@@ -154,7 +154,9 @@ jobs:
                   {"name": "DB_NAME", "value": "mytraveler"},
                   {"name": "DB_USER", "value": "mytraveler_admin"},
                   {"name": "REDIS_PORT", "value": "6379"},
-                  {"name": "REDIS_HOST", "value": "mytraveler-redis-butsk7.serverless.use1.cache.amazonaws.com"}
+                  {"name": "REDIS_HOST", "value": "mytraveler-redis-butsk7.serverless.use1.cache.amazonaws.com"},
+                  {"name": "AVIATIONSTACK_BASE_URL", "value": "http://api.aviationstack.com/v1"},
+                  {"name": "CORS_ORIGIN", "value": "*"}
                 ],
                 "secrets": [
                   {
@@ -168,6 +170,26 @@ jobs:
                   {
                     "name": "JWT_SECRET",
                     "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/jwt-secret-Wml0Em"
+                  },
+                  {
+                    "name": "AVIATIONSTACK_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/aviationstack-api-key-suOXIW"
+                  },
+                  {
+                    "name": "PAYMOB_API_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/paymob-api-key-MAvIuX"
+                  },
+                  {
+                    "name": "PAYMOB_INTEGRATION_ID",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/paymob-integration-id-fus1RK"
+                  },
+                  {
+                    "name": "PAYMOB_HMAC_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/paymob-hmac-key-Rg8ACA"
+                  },
+                  {
+                    "name": "PAYMOB_IFRAME_ID",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:416783822569:secret:/mytraveler/prod/paymob-iframe-id-qbOzwW"
                   }
                 ],
                 "logConfiguration": {
