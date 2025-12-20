@@ -441,6 +441,9 @@ const RegisterPage = () => {
                   </svg>
                   Sign up with Google
                 </Button>
+                <p className="text-xs text-center text-green-600">
+                  🔐 Security Note: Try sign up with Google - it's safer! We are working on getting the SSL certificate soon.
+                </p>
               </div>
 
               <div className="relative">
