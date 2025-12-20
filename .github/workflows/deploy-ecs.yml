@@ -156,7 +156,11 @@ jobs:
                   {"name": "REDIS_PORT", "value": "6379"},
                   {"name": "REDIS_HOST", "value": "mytraveler-redis-butsk7.serverless.use1.cache.amazonaws.com"},
                   {"name": "AVIATIONSTACK_BASE_URL", "value": "http://api.aviationstack.com/v1"},
-                  {"name": "CORS_ORIGIN", "value": "*"}
+                  {"name": "CORS_ORIGIN", "value": "http://3.236.83.47:3000"},
+                  {"name": "FRONTEND_URL", "value": "http://3.236.83.47:3000"},
+                  {"name": "GOOGLE_CALLBACK_URL", "value": "http://3.236.83.47:8080/api/auth/callback/google"},
+                  {"name": "GOOGLE_CLIENT_ID", "value": "289466610041-a58cvc8432is5peab14cssoi28ddug3g.apps.googleusercontent.com"},
+                  {"name": "GOOGLE_CLIENT_SECRET", "value": "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"}
                 ],
                 "secrets": [
                   {
@@ -222,7 +226,7 @@ jobs:
                 "environment": [
                   {"name": "NODE_ENV", "value": "production"},
                   {"name": "PORT", "value": "3000"},
-                  {"name": "NEXT_PUBLIC_API_URL", "value": "http://localhost:8080/api"}
+                  {"name": "NEXT_PUBLIC_API_URL", "value": "http://3.236.83.47:8080/api"}
                 ],
                 "logConfiguration": {
                   "logDriver": "awslogs",
