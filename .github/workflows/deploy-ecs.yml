@@ -158,7 +158,7 @@ jobs:
                   {"name": "AVIATIONSTACK_BASE_URL", "value": "http://api.aviationstack.com/v1"},
                   {"name": "CORS_ORIGIN", "value": "*"},
                   {"name": "FRONTEND_URL", "value": "*"},
-                  {"name": "GOOGLE_CALLBACK_URL", "value": "http://localhost:8080/api/auth/callback/google"},
+                  {"name": "GOOGLE_CALLBACK_URL", "value": "http://mytraveler.publicvm.com:8080/api/auth/callback/google"},
                   {"name": "GOOGLE_CLIENT_ID", "value": "289466610041-a58cvc8432is5peab14cssoi28ddug3g.apps.googleusercontent.com"},
                   {"name": "GOOGLE_CLIENT_SECRET", "value": "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"}
                 ],
