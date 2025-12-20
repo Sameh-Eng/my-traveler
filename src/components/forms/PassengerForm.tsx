@@ -46,7 +46,7 @@ const passengerSchema = z.object({
     const age = calculateAge(parsedDate)
     return !isNaN(parsedDate.getTime()) && age >= 0 && age <= 120
   }, 'Please enter a valid date of birth'),
-  gender: z.enum(['M', 'F', 'X'], { required_error: 'Gender is required' }),
+  gender: z.enum(['M', 'F'], { required_error: 'Gender is required' }),
   passportNumber: z.string()
     .min(6, 'Passport number too short')
     .max(20, 'Passport number too long')
@@ -109,7 +109,7 @@ const PassengerForm = ({
       middleName: passenger?.middleName || '',
       lastName: passenger?.lastName || '',
       dateOfBirth: passenger?.dateOfBirth ? new Date(passenger.dateOfBirth).toISOString().split('T')[0] : '',
-      gender: passenger?.gender || 'M',
+      gender: (passenger?.gender === 'M' || passenger?.gender === 'F') ? passenger.gender : 'M',
       passportNumber: passenger?.passport?.number || '',
       passportExpiry: passenger?.passport?.expiry ? new Date(passenger.passport.expiry).toISOString().split('T')[0] : '',
       passportCountry: passenger?.passport?.country || 'EG',
@@ -398,10 +398,6 @@ const PassengerForm = ({
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="F" id="female" />
                         <Label htmlFor="female">Female</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="X" id="other" />
-                        <Label htmlFor="other">Other</Label>
                       </div>
                     </RadioGroup>
                   )}
