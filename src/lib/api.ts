@@ -2,8 +2,20 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { parseAPIError, NetworkError, TimeoutError, AppError } from './error-handling'
 import { ApiResponse, FlightSearchParams, FlightSearchResponse } from '@/types'
 
-// API configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+// API configuration - dynamically detect backend URL based on browser location
+const getApiBaseUrl = () => {
+  // If running in browser, use the same hostname but port 8080
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    const protocol = window.location.protocol
+    // In production on ECS, frontend is on port 3000, backend on port 8080
+    return `${protocol}//${hostname}:8080/api`
+  }
+  // Server-side rendering fallback
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 class ApiClient {
   private client: AxiosInstance

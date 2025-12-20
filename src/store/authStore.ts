@@ -555,8 +555,10 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        // Otherwise, redirect to Google OAuth
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082/api'
+        // Otherwise, redirect to Google OAuth - use dynamic API URL
+        const hostname = window.location.hostname
+        const protocol = window.location.protocol
+        const apiUrl = `${protocol}//${hostname}:8080/api`
         window.location.href = `${apiUrl}/auth/google`
       },
 

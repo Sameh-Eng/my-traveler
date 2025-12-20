@@ -171,7 +171,10 @@ const PaymentPage = () => {
       }
 
       // Call backend to create Paymob payment intent
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082/api'
+      // Use dynamic API URL based on browser location
+      const hostname = window.location.hostname
+      const protocol = window.location.protocol
+      const apiUrl = `${protocol}//${hostname}:8080/api`
       const response = await fetch(`${apiUrl}/payment/create-intent`, {
         method: 'POST',
         headers: {
