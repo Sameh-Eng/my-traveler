@@ -49,25 +49,44 @@ const PaymentPage = () => {
     // Load booking details from URL params or booking store
     const loadBookingDetails = () => {
       try {
-        // In a real app, this would fetch from API
-        const mockBookingDetails = {
+        // Calculate actual pricing from selected flights and passengers
+        const flightsToUse = selectedFlights.length > 0 ? selectedFlights : [getMockFlight()]
+        const passengersToUse = passengers.length > 0 ? passengers : [getMockPassenger()]
+
+        // Calculate total price based on flights and passengers
+        let basePrice = 0
+        flightsToUse.forEach((flight: any) => {
+          const flightPrice = flight.price?.total || flight.price?.base || 0
+          basePrice += flightPrice * passengersToUse.length
+        })
+
+        // If no price from flights, use a default calculation
+        if (basePrice === 0) {
+          basePrice = 1500 * passengersToUse.length // Default base price per passenger
+        }
+
+        const taxes = Math.round(basePrice * 0.15) // 15% taxes
+        const fees = 150 // Fixed service fee
+        const totalAmount = basePrice + taxes + fees
+
+        const calculatedBookingDetails = {
           id: bookingId,
-          flights: selectedFlights.length > 0 ? selectedFlights : [getMockFlight()],
-          passengers: passengers.length > 0 ? passengers : [getMockPassenger()],
+          flights: flightsToUse,
+          passengers: passengersToUse,
           status: 'pending_payment',
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes from now
           pricing: {
-            basePrice: 5200,
-            taxes: 780,
-            fees: 150,
+            basePrice,
+            taxes,
+            fees,
             insurance: 0,
             extras: 0,
-            totalAmount: 6130
+            totalAmount
           }
         }
 
-        setBookingDetails(mockBookingDetails)
+        setBookingDetails(calculatedBookingDetails)
         setLoading(false)
       } catch (err) {
         setError('Failed to load booking details')

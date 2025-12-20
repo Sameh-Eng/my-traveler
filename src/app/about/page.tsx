@@ -86,7 +86,7 @@ const AboutPage = () => {
                             <div className="space-y-4 text-gray-600">
                                 <p>
                                     MyTraveler started as a university project at <strong>MSA University</strong> in
-                                    6th of October City, Egypt. Our team of computer science students wanted to
+                                    6th of October City, Egypt. Our team of computer engineering students wanted to
                                     challenge ourselves by building something meaningful—a full-featured flight
                                     booking platform that people could actually use.
                                 </p>
@@ -108,7 +108,7 @@ const AboutPage = () => {
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-gray-900">MSA University</h3>
-                                    <p className="text-gray-500">Computer Science Students</p>
+                                    <p className="text-gray-500">Computer Engineering Students</p>
                                 </div>
                             </div>
                             <div className="border-t pt-6">
